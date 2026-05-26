@@ -1,5 +1,7 @@
 # modbus-serial
 
+> **Fork notice**: This is a modified branch focused on improving reliability when reading data from **slow Modbus devices**. Changes address timeout handling, response buffering, and transaction management for devices with delayed or inconsistent response times. See git history for specific changes.
+
 A pure JavaScript implementation of MODBUS-RTU (Serial and TCP) for NodeJS.
 
 [![NPM download](https://img.shields.io/npm/dm/modbus-serial.svg)](https://www.npmjs.com/package/modbus-serial)
