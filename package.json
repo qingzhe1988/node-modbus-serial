@@ -4,6 +4,10 @@
   "description": "Fork of modbus-serial with improved reliability for slow Modbus devices. A pure JavaScript implementation of MODBUS-RTU (Serial and TCP) for NodeJS. The serialport package is an optional dependency (use npm install --no-optional to skip).",
   "main": "index.js",
   "types": "index.d.ts",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "files": [
     "index.js",
     "apis",
