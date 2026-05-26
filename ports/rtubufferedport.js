@@ -72,6 +72,9 @@ class RTUBufferedPort extends EventEmitter {
         this._id = 0;
         this._cmd = 0;
         this._length = 0;
+        this._echoLength = 0;
+        this._echoSkipped = true;
+        this._echoData = null;
 
         // create the SerialPort
         this._client = new SerialPort(Object.assign({}, { path }, options));
@@ -90,6 +93,29 @@ class RTUBufferedPort extends EventEmitter {
         this._client.on("data", function onData(data) {
             // add data to buffer
             self._buffer = Buffer.concat([self._buffer, data]);
+
+            // skip RS-485 request echo: find echo pattern anywhere in buffer (not just prefix)
+            // This handles residual echo from previous requests that arrive before the current echo
+            if (!self._echoSkipped && self._echoLength > 0 && self._buffer.length >= self._echoLength && self._echoData) {
+                const idx = self._buffer.indexOf(self._echoData)
+                if (idx >= 0) {
+                    modbusSerialDebug({
+                        action: 'serial echo skip - found echo at offset, discarding leading garbage',
+                        echoOffset: idx,
+                        strippedBytes: idx + self._echoLength,
+                        bufferLengthBefore: self._buffer.length,
+                        bufferHexBefore: self._buffer.toString('hex'),
+                        echoHex: self._echoData.toString('hex')
+                    })
+                    self._buffer = self._buffer.slice(idx + self._echoLength)
+                    self._echoSkipped = true
+                    modbusSerialDebug({
+                        action: 'serial echo skip - after strip',
+                        bufferHexAfter: self._buffer.toString('hex'),
+                        bufferLengthAfter: self._buffer.length
+                    })
+                }
+            }
 
             modbusSerialDebug({ action: "receive serial rtu buffered port", data: data, buffer: self._buffer });
 
@@ -204,6 +230,12 @@ class RTUBufferedPort extends EventEmitter {
         }
 
         let length;
+
+        // clear buffer and prepare to skip RS-485 request echo
+        this._buffer = Buffer.alloc(0);
+        this._echoLength = data.length;
+        this._echoSkipped = false;
+        this._echoData = Buffer.from(data);
 
         // remember current unit and command
         this._id = data[0];
