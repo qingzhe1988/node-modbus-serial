@@ -231,6 +231,11 @@ class RTUBufferedPort extends EventEmitter {
 
         let length;
 
+        // Flush OS serial port input buffer to discard residual echo from previous request
+        if (this._client.flush) {
+            try { this._client.flush() } catch (e) { /* ignore flush errors */ }
+        }
+
         // clear buffer and prepare to skip RS-485 request echo
         this._buffer = Buffer.alloc(0);
         this._echoLength = data.length;
