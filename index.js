@@ -357,7 +357,6 @@ function _writeBufferToPort(buffer, transactionId) {
 
     if (transaction) {
         transaction._timeoutFired = false;
-        transaction._timeoutHandle = _startTimeout(this._timeout, transaction);
 
         // If in debug mode, stash a copy of the request payload
         if (this._debugEnabled) {
@@ -367,6 +366,20 @@ function _writeBufferToPort(buffer, transactionId) {
     }
 
     this._port.write(buffer);
+
+    // Start timeout AFTER data is physically transmitted via drain(),
+    // so RS485 half-duplex transceiver has time to switch from TX to RX
+    if (this._port._client && typeof this._port._client.drain === 'function') {
+        this._port._client.drain(function() {
+            if (transaction && !transaction._timeoutHandle) {
+                transaction._timeoutHandle = _startTimeout(this._timeout, transaction);
+            }
+        }.bind(this));
+    } else {
+        if (transaction && !transaction._timeoutHandle) {
+            transaction._timeoutHandle = _startTimeout(this._timeout, transaction);
+        }
+    }
 }
 
 /**
