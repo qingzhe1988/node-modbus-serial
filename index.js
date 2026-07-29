@@ -358,8 +358,9 @@ function _writeBufferToPort(buffer, transactionId) {
     if (transaction) {
         transaction._timeoutFired = false;
 
-        // If in debug mode, stash a copy of the request payload
-        if (this._debugEnabled) {
+        // Always capture FC5 request/response frames for targeted diagnostics.
+        // Other transactions retain the existing opt-in debug behavior.
+        if (buffer[1] === 5 || this._debugEnabled) {
             transaction.request = Uint8Array.prototype.slice.call(buffer);
             transaction.responses = [];
         }
