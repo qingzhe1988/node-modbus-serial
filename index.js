@@ -398,6 +398,12 @@ function _startTimeout(duration, transaction) {
     return setTimeout(function() {
         transaction._timeoutFired = true;
         if (transaction.next) {
+            // FC5 (Force Single Coil) workaround:
+            // Some Modbus slaves execute the write but do not send the
+            // echo response per spec. Resolve without error for FC5.
+            if (transaction.nextCode === 5) {
+                return transaction.next();
+            }
             const err = new TransactionTimedOutError();
             if (transaction.request && transaction.responses) {
                 err.modbusRequest = transaction.request;
