@@ -369,17 +369,30 @@ function _writeBufferToPort(buffer, transactionId) {
     this._port.write(buffer);
 
     // Start timeout AFTER data is physically transmitted via drain(),
-    // so RS485 half-duplex transceiver has time to switch from TX to RX
-    if (this._port._client && typeof this._port._client.drain === 'function') {
-        this._port._client.drain(function() {
-            if (transaction && !transaction._timeoutHandle) {
-                transaction._timeoutHandle = _startTimeout(this._timeout, transaction);
-            }
-        }.bind(this));
-    } else {
+    // so RS485 half-duplex transceiver has time to switch from TX to RX.
+    // Fallback: if drain never fires (some serial drivers don't), start
+    // the timeout after a short delay so transactions can never hang forever.
+    const startTimeoutSafe = function() {
         if (transaction && !transaction._timeoutHandle) {
             transaction._timeoutHandle = _startTimeout(this._timeout, transaction);
         }
+    }.bind(this);
+
+    if (this._port._client && typeof this._port._client.drain === 'function') {
+        let drainCalled = false;
+        this._port._client.drain(function() {
+            drainCalled = true;
+            startTimeoutSafe();
+        });
+        // Fallback timer: if drain callback doesn't fire within 100ms,
+        // start the timeout anyway (prevents indefinite transaction hang).
+        setTimeout(function() {
+            if (!drainCalled) {
+                startTimeoutSafe();
+            }
+        }, 100);
+    } else {
+        startTimeoutSafe();
     }
 }
 
