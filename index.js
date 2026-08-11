@@ -380,13 +380,20 @@ function _writeBufferToPort(buffer, transactionId) {
 
     if (this._port._client && typeof this._port._client.drain === 'function') {
         let drainCalled = false;
+        let fallbackHandle = null;
         this._port._client.drain(function() {
             drainCalled = true;
+            // Clear the fallback timer so it doesn't linger for every transaction.
+            if (fallbackHandle) {
+                clearTimeout(fallbackHandle);
+                fallbackHandle = null;
+            }
             startTimeoutSafe();
         });
         // Fallback timer: if drain callback doesn't fire within 100ms,
         // start the timeout anyway (prevents indefinite transaction hang).
-        setTimeout(function() {
+        fallbackHandle = setTimeout(function() {
+            fallbackHandle = null;
             if (!drainCalled) {
                 startTimeoutSafe();
             }
