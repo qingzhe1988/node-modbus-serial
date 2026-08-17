@@ -374,7 +374,7 @@ function _writeBufferToPort(buffer, transactionId) {
     // the timeout after a short delay so transactions can never hang forever.
     const startTimeoutSafe = function() {
         if (transaction && !transaction._timeoutHandle) {
-            transaction._timeoutHandle = _startTimeout(this._timeout, transaction);
+            transaction._timeoutHandle = _startTimeout.call(this, this._timeout, transaction);
         }
     }.bind(this);
 
@@ -406,17 +406,26 @@ function _writeBufferToPort(buffer, transactionId) {
 /**
  * Starts the timeout timer with the given duration.
  * If the timeout ends before it was cancelled, it will call the callback with an error.
+ * <code><b>[this]</b></code> has the context of ModbusRTU.
  * @param {number} duration the timeout duration in milliseconds.
  * @param {Function} next the function to call next.
  * @return {number} The handle of the timeout
  * @private
  */
 function _startTimeout(duration, transaction) {
+    // floor the timeout at 500ms - a 0/undefined timeout would leave the
+    // transaction pending forever (matches the C# reference lower bound)
     if (!duration) {
-        return undefined;
+        duration = 500;
     }
+    const client = this;
     return setTimeout(function() {
         transaction._timeoutFired = true;
+        // purge the port buffer right away, so a late response from this
+        // timed-out transaction can never be consumed by the next one
+        if (client._port && typeof client._port.purge === "function") {
+            client._port.purge();
+        }
         if (transaction.next) {
             // FC5 (Force Single Coil) workaround:
             // Some Modbus slaves execute the write but do not send the

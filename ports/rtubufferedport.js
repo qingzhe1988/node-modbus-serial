@@ -67,6 +67,11 @@ class RTUBufferedPort extends EventEmitter {
         // disable auto open, as we handle the open
         options.autoOpen = false;
 
+        // RS-485 echo strip window (ms): a local echo arrives immediately after
+        // write(), far before any slave response time, so stripping is only
+        // allowed inside this window. Configurable via port options.
+        this._echoWindowMs = options.echoWindowMs || 30;
+
         // internal buffer
         this._buffer = Buffer.alloc(0);
         this._id = 0;
@@ -75,6 +80,7 @@ class RTUBufferedPort extends EventEmitter {
         this._echoLength = 0;
         this._echoSkipped = true;
         this._echoData = null;
+        this._echoWindowUntil = 0;
 
         // create the SerialPort
         this._client = new SerialPort(Object.assign({}, { path }, options));
@@ -94,20 +100,24 @@ class RTUBufferedPort extends EventEmitter {
             // add data to buffer
             self._buffer = Buffer.concat([self._buffer, data]);
 
-            // skip RS-485 request echo: find echo pattern anywhere in buffer (not just prefix)
-            // This handles residual echo from previous requests that arrive before the current echo
-            if (!self._echoSkipped && self._echoLength > 0 && self._buffer.length >= self._echoLength && self._echoData) {
-                const idx = self._buffer.indexOf(self._echoData)
-                if (idx >= 0) {
+            // skip RS-485 request echo, but ONLY:
+            // 1. within the echo window - a local echo arrives immediately after
+            //    write(), far before any slave response. Without the window,
+            //    FC5/FC6 responses (which echo the request frame byte-for-byte
+            //    per Modbus spec) get stripped as "echo" and every write on a
+            //    non-loopback adapter burns a full timeout.
+            // 2. as an exact prefix match - prevents stripping response data
+            //    segments that happen to contain the request frame sequence.
+            if (!self._echoSkipped && self._echoLength > 0 && self._buffer.length >= self._echoLength && self._echoData && Date.now() <= self._echoWindowUntil) {
+                if (self._buffer.indexOf(self._echoData) === 0) {
                     modbusSerialDebug({
-                        action: 'serial echo skip - found echo at offset, discarding leading garbage',
-                        echoOffset: idx,
-                        strippedBytes: idx + self._echoLength,
+                        action: 'serial echo skip - prefix match',
+                        strippedBytes: self._echoLength,
                         bufferLengthBefore: self._buffer.length,
                         bufferHexBefore: self._buffer.toString('hex'),
                         echoHex: self._echoData.toString('hex')
                     })
-                    self._buffer = self._buffer.slice(idx + self._echoLength)
+                    self._buffer = self._buffer.slice(self._echoLength)
                     self._echoSkipped = true
                     modbusSerialDebug({
                         action: 'serial echo skip - after strip',
@@ -241,6 +251,7 @@ class RTUBufferedPort extends EventEmitter {
         this._echoLength = data.length;
         this._echoSkipped = false;
         this._echoData = Buffer.from(data);
+        this._echoWindowUntil = Date.now() + this._echoWindowMs;
 
         // remember current unit and command
         this._id = data[0];
@@ -291,6 +302,23 @@ class RTUBufferedPort extends EventEmitter {
             functionCode: this._cmd,
             length: this._length
         });
+    }
+
+    /**
+     * Discard any received-but-unmatched data and pending OS input.
+     * Called by the client when a transaction times out, so a late response
+     * from the timed-out request can never be mistaken for the next
+     * transaction's response (RTU frames carry no transaction id).
+     */
+    purge() {
+        this._buffer = Buffer.alloc(0);
+        this._echoSkipped = true;
+        this._echoData = null;
+        this._echoLength = 0;
+        this._echoWindowUntil = 0;
+        if (this._client && typeof this._client.flush === "function") {
+            try { this._client.flush() } catch (e) { /* ignore flush errors */ }
+        }
     }
 }
 
