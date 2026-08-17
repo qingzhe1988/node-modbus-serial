@@ -320,6 +320,24 @@ class RTUBufferedPort extends EventEmitter {
             try { this._client.flush() } catch (e) { /* ignore flush errors */ }
         }
     }
+
+    /**
+     * Update serial port settings (baudRate, parity, dataBits, stopBits)
+     * in place via the underlying SerialPort.update(), without closing and
+     * reopening the port. Used when switching between slaves with different
+     * serial parameters on the same RS-485 bus - avoids the close/open cost
+     * and the risk of hanging in-flight IPC requests.
+     *
+     * @param {Object} options - serial port options to update
+     * @param {Function} callback
+     */
+    update(options, callback) {
+        if (this._client && typeof this._client.update === "function") {
+            this._client.update(options, callback);
+        } else if (callback) {
+            callback(new Error("serial port update is not supported"));
+        }
+    }
 }
 
 /**

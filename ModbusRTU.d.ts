@@ -52,8 +52,10 @@ export class ModbusRTU {
   connectTelnet(ip: string, options: TelnetPortOptions): Promise<void>;
   connectC701(ip: string, options: C701PortOptions, next: Function): void;
   connectC701(ip: string, options: C701PortOptions): Promise<void>;
-  connectRTUBuffered(path: string, options: SerialPortOptions, next: Function): void;
-  connectRTUBuffered(path: string, options: SerialPortOptions): Promise<void>;
+connectRTUBuffered(path: string, options: SerialPortOptions, next: Function): void;
+connectRTUBuffered(path: string, options: SerialPortOptions): Promise<void>;
+update(options: SerialPortOptions, next: Function): void;
+update(options: SerialPortOptions): Promise<void>;
   connectAsciiSerial(path: string, options: SerialPortOptions, next: Function): void;
   connectAsciiSerial(path: string, options: SerialPortOptions): Promise<void>;
   linkTCP(socket: Socket, options: TcpPortOptions, next: Function): void;

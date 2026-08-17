@@ -315,6 +315,45 @@ const addConnectionAPI = function(Modbus) {
     };
 
     /**
+     * Update serial port settings in place (without close/reopen).
+     * Only supported for RTU buffered serial ports; used when switching
+     * between slaves with different serial parameters on the same bus.
+     *
+     * @param {Object} options - serial port options to update (baudRate, parity, dataBits, stopBits)
+     * @param {Function} next the function to call next.
+     */
+    cl.update = function(options, next) {
+        // check if we have a callback
+        if (typeof next === "undefined" && typeof options === "function") {
+            next = options;
+            options = {};
+        }
+
+        if (this._port && typeof this._port.update === "function") {
+            if (next) {
+                // if we have a callback, use it
+                this._port.update(options, next);
+            } else {
+                // otherwise use a promise
+                const port = this._port;
+                return new Promise(function(resolve, reject) {
+                    port.update(options, function(err) {
+                        if (err) {
+                            reject(err);
+                        } else {
+                            resolve();
+                        }
+                    });
+                });
+            }
+        } else if (next) {
+            next(new Error("update is not supported for this port type"));
+        } else {
+            return Promise.reject(new Error("update is not supported for this port type"));
+        }
+    };
+
+    /**
      * Connect to a communication port, using Buffered Serial port.
      *
      * @param {string} path the path to the Serial Port - required.

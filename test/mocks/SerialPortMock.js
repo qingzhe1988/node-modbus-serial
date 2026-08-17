@@ -34,6 +34,13 @@ class SerialPortMock extends EventEmitter {
         }
     }
 
+    update(options, callback) {
+        this._updatedOptions = options;
+        if (callback) {
+            callback(null);
+        }
+    }
+
     close(callback) {
         this._openFlag = false;
         if (callback) {
