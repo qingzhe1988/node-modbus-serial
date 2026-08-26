@@ -492,6 +492,12 @@ function _onReceive(data) {
                 }
             }
 
+            /* Always attach the raw received frame to errors, so callers can
+             * inspect the device-returned bytes (e.g. for CRC debugging). */
+            if (err) {
+                err.modbusResponseData = Uint8Array.prototype.slice.call(data);
+            }
+
             /* Pass the data on */
             return transaction.next(err, res);
         }
