@@ -3,6 +3,16 @@ const events = require("events");
 const EventEmitter = events.EventEmitter || events;
 const SerialPort = require("serialport").SerialPort;
 const modbusSerialDebug = require("debug")("modbus-serial");
+const fs = require("fs");
+
+// 调试用：把串口收发帧写入文件（绕开子进程 stdout 被吞的问题）
+// 通过环境变量 MODBUS_DEBUG_FILE 指定路径，默认 /data/modbus-debug.log
+const MODBUS_DEBUG_FILE = process.env.MODBUS_DEBUG_FILE || "/data/modbus-debug.log";
+function fileLog(action, buffer) {
+    try {
+        fs.appendFileSync(MODBUS_DEBUG_FILE, `${new Date().toISOString()} ${action} ${buffer.toString("hex")}\n`);
+    } catch (e) { /* 写日志失败不影响主流程 */ }
+}
 
 /* TODO: const should be set once, maybe */
 const EXCEPTION_LENGTH = 5;
@@ -99,6 +109,7 @@ class RTUBufferedPort extends EventEmitter {
         this._client.on("data", function onData(data) {
             // add data to buffer
             self._buffer = Buffer.concat([self._buffer, data]);
+            fileLog("RX", data);
 
             // skip RS-485 request echo, but ONLY:
             // 1. within the echo window - a local echo arrives immediately after
@@ -204,6 +215,7 @@ class RTUBufferedPort extends EventEmitter {
      */
     _emitData(start, length) {
         const buffer = this._buffer.slice(start, start + length);
+        fileLog("EMIT", buffer);
         modbusSerialDebug({ action: "emit data serial rtu buffered port", buffer: buffer });
         this.emit("data", buffer);
         this._buffer = this._buffer.slice(start + length);
@@ -288,6 +300,7 @@ class RTUBufferedPort extends EventEmitter {
         }
 
         // send buffer to slave
+        fileLog("TX", data);
         this._client.write(data);
 
         modbusSerialDebug({
